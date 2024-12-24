@@ -67,102 +67,96 @@ useEffect(() => {
     );
   };
   return (
-    <div className="container-fluid">
-      <div className="row">
-        <h1 className="display-5 pt-4 pb-3 text-center">
-          React Drawing App - users online:{userNo}
+    <div className="min-h-screen bg-gray-100 flex flex-col items-center p-6">
+      {/* Header */}
+      <header className="w-full max-w-4xl mb-6">
+        <h1 className="text-4xl font-extrabold text-center text-indigo-600">
+          React Drawing App
         </h1>
-      </div>
-      <div className="row justify-content-center align-items-center text-center py-2">
-        <div className="col-md-2">
-          <div className="color-picker d-flex align-items-center justify-content-center">
-            Color Picker : &nbsp;
+        <p className="mt-2 text-center text-gray-600">
+          Users Online:{" "}
+          <span className="font-semibold text-indigo-500">{userNo}</span>
+        </p>
+      </header>
+
+      {/* Controls */}
+      <div className="w-full max-w-4xl bg-white rounded-lg shadow-md p-6 mb-6">
+        <div className="flex flex-col md:flex-row items-center justify-between space-y-4 md:space-y-0">
+          {/* Color Picker */}
+          <div className="flex items-center space-x-3">
+            <label className="text-gray-700 font-medium">Choose Color:</label>
             <input
               type="color"
               value={color}
               onChange={(e) => setColor(e.target.value)}
+              className="w-10 h-10 border border-gray-300 rounded-md cursor-pointer"
             />
           </div>
-        </div>
-        <div className="col-md-3">
-          <div className="form-check form-check-inline">
-            <input
-              className="form-check-input"
-              type="radio"
-              name="tools"
-              id="pencil"
-              value="pencil"
-              checked={tool === "pencil"}
-              onClick={(e) => setTool(e.target.value)}
-              readOnly={true}
-            />
-            <label className="form-check-label" htmlFor="pencil">
-              Pencil
-            </label>
-          </div>
-          <div className="form-check form-check-inline">
-            <input
-              className="form-check-input"
-              type="radio"
-              name="tools"
-              id="line"
-              value="line"
-              checked={tool === "line"}
-              onClick={(e) => setTool(e.target.value)}
-              readOnly={true}
-            />
-            <label className="form-check-label" htmlFor="line">
-              Line
-            </label>
-          </div>
-          <div className="form-check form-check-inline">
-            <input
-              className="form-check-input"
-              type="radio"
-              name="tools"
-              id="rect"
-              value="rect"
-              checked={tool === "rect"}
-              onClick={(e) => setTool(e.target.value)}
-              readOnly={true}
-            />
-            <label className="form-check-label" htmlFor="rect">
-              Rectangle
-            </label>
-          </div>
-        </div>
 
-        <div className="col-md-2">
-          <button
-            type="button"
-            className="btn btn-outline-primary"
-            disabled={elements.length === 0}
-            onClick={() => undo()}
-          >
-            Undo
-          </button>
-          &nbsp;&nbsp;
-          <button
-            type="button"
-            className="btn btn-outline-primary ml-1"
-            disabled={history.length < 1}
-            onClick={() => redo()}
-          >
-            Redo
-          </button>
-        </div>
-        <div className="col-md-1">
-          <div className="color-picker d-flex align-items-center justify-content-center">
-            <input
+          {/* Tool Selection */}
+          <div className="flex items-center space-x-4">
+            {[
+              { id: "pencil", label: "Pencil" },
+              { id: "line", label: "Line" },
+              { id: "rect", label: "Rectangle" },
+            ].map(({ id, label }) => (
+              <label
+                key={id}
+                className="flex items-center space-x-2 text-gray-700 cursor-pointer"
+              >
+                <input
+                  type="radio"
+                  name="tools"
+                  id={id}
+                  value={id}
+                  checked={tool === id}
+                  onChange={(e) => setTool(e.target.value)}
+                  className="form-radio h-4 w-4 text-indigo-600"
+                />
+                <span className="font-medium">{label}</span>
+              </label>
+            ))}
+          </div>
+
+          {/* Action Buttons */}
+          <div className="flex space-x-3">
+            <button
               type="button"
-              className="btn btn-danger"
-              value="clear canvas"
+              className={`flex items-center px-4 py-2 bg-indigo-500 text-white rounded-md shadow hover:bg-indigo-600 transition ${
+                elements.length === 0
+                  ? "opacity-50 cursor-not-allowed"
+                  : ""
+              }`}
+              disabled={elements.length === 0}
+              onClick={undo}
+            >
+              Undo
+            </button>
+            <button
+              type="button"
+              className={`flex items-center px-4 py-2 bg-indigo-500 text-white rounded-md shadow hover:bg-indigo-600 transition ${
+                history.length === 0
+                  ? "opacity-50 cursor-not-allowed"
+                  : ""
+              }`}
+              disabled={history.length === 0}
+              onClick={redo}
+            >
+              Redo
+            </button>
+            <button
+              type="button"
+              className="flex items-center px-4 py-2 bg-red-500 text-white rounded-md shadow hover:bg-red-600 transition"
               onClick={clearCanvas}
-            />
+            >
+              Clear Canvas
+            </button>
           </div>
         </div>
       </div>
-      <div className="row">
+
+      {/* Canvas */}
+      <div className="w-full max-w-4xl bg-white border border-gray-200 rounded-lg shadow-md">
         <Canvas
           canvasRef={canvasRef}
           ctx={ctx}
@@ -173,6 +167,9 @@ useEffect(() => {
           socket={socket}
         />
       </div>
+
+      {/* Toast Container (Ensure to include this in your main App component) */}
+      {/* <ToastContainer position="top-right" autoClose={3000} hideProgressBar /> */}
     </div>
   );
 };

@@ -56,15 +56,15 @@ const App = () => {
       {roomJoined ? (
         <>
           <Sidebar users={users} user={user} socket={socket} />
-          {user.presenter ? (
-            <Room
-              userNo={userNo}
-              user={user}
-              socket={socket}
-              setUsers={setUsers}
-              setUserNo={setUserNo}
-            />
-          ) : (
+          {/* {user.presenter ? ( */}
+          <Room
+            userNo={userNo}
+            user={user}
+            socket={socket}
+            setUsers={setUsers}
+            setUserNo={setUserNo}
+          />
+          {/* ) : (
             <ClientRoom
               userNo={userNo}
               user={user}
@@ -72,7 +72,7 @@ const App = () => {
               setUsers={setUsers}
               setUserNo={setUserNo}
             />
-          )}
+          )} */}
         </>
       ) : (
         <JoinCreateRoom
