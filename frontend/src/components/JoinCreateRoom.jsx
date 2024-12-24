@@ -2,11 +2,17 @@ import React, { useState } from "react";
 import { CopyToClipboard } from "react-copy-to-clipboard";
 import { toast } from "react-toastify";
 
-const JoinCreateRoom = ({ uuid, setUser, setRoomJoined }) => {
-  const [roomId, setRoomId] = useState(uuid());
+const JoinCreateRoom = ({
+  uuid,
+  setUser,
+  setRoomJoined,
+  setGlobalRoomId,
+}) => {
   const [name, setName] = useState("");
   const [joinName, setJoinName] = useState("");
   const [joinRoomId, setJoinRoomId] = useState("");
+  const [roomId, setRoomId] = useState(uuid());
+
 
   const handleCreateSubmit = (e) => {
     e.preventDefault();

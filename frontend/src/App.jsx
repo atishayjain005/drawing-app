@@ -1,10 +1,11 @@
 import React, { useEffect, useState } from "react";
 import { toast, ToastContainer } from "react-toastify";
 import io from "socket.io-client";
-import ClientRoom from "./ClientRoom";
-import JoinCreateRoom from "./JoinCreateRoom";
-import Room from "./Room";
-import Sidebar from "./Sidebar";
+// import ClientRoom from "./ClientRoom";
+import JoinCreateRoom from "./components/JoinCreateRoom";
+import Room from "./components/Room";
+import { v4 as uuid } from 'uuid';
+
 
 import "./index.css";
 
@@ -23,26 +24,8 @@ const App = () => {
   const [roomJoined, setRoomJoined] = useState(false);
   const [user, setUser] = useState({});
   const [users, setUsers] = useState([]);
+  const [roomId, setRoomId] = useState("");
 
-  const uuid = () => {
-    var S4 = () => {
-      return (((1 + Math.random()) * 0x10000) | 0).toString(16).substring(1);
-    };
-    return (
-      S4() +
-      S4() +
-      "-" +
-      S4() +
-      "-" +
-      S4() +
-      "-" +
-      S4() +
-      "-" +
-      S4() +
-      S4() +
-      S4()
-    );
-  };
 
   useEffect(() => {
     if (roomJoined) {
@@ -55,14 +38,16 @@ const App = () => {
       <ToastContainer />
       {roomJoined ? (
         <>
-          <Sidebar users={users} user={user} socket={socket} />
+          {/* <Sidebar users={users} user={user} socket={socket} /> */}
           {/* {user.presenter ? ( */}
           <Room
             userNo={userNo}
             user={user}
+            users={users}
             socket={socket}
             setUsers={setUsers}
             setUserNo={setUserNo}
+            roomId={roomId}
           />
           {/* ) : (
             <ClientRoom
@@ -79,6 +64,7 @@ const App = () => {
           uuid={uuid}
           setRoomJoined={setRoomJoined}
           setUser={setUser}
+          setGlobalRoomId={setRoomId}
         />
       )}
     </div>
