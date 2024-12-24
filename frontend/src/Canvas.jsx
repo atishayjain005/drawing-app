@@ -1,43 +1,63 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useRef, useState, useCallback } from "react";
 import rough from "roughjs";
+import { debounce } from 'lodash';
 
 const generator = rough.generator();
 
 const Canvas = ({ canvasRef, ctx, color, setElements, elements, tool, socket }) => {
   const [isDrawing, setIsDrawing] = useState(false);
   const startCoords = useRef(null);
+  const drawingRef = useRef(false);
+  const requestRef = useRef();
+  const bufferRef = useRef([]);
+
+  // Debounced emit function to reduce socket events
+  const debouncedEmit = useCallback(
+    debounce((element) => {
+      socket.emit("drawing", element);
+    }, 50),
+    [socket]
+  );
 
   useEffect(() => {
     const canvas = canvasRef.current;
     const rect = canvas.getBoundingClientRect();
     
-    // Set canvas size to match its display size
     canvas.width = rect.width;
     canvas.height = rect.height;
     
-    const context = canvas.getContext("2d");
+    const context = canvas.getContext("2d", { willReadFrequently: true });
     ctx.current = context;
+    
+    // Enable canvas optimization
+    context.imageSmoothingEnabled = true;
+    context.imageSmoothingQuality = "high";
+
+    const handleIncomingDrawing = (data) => {
+      if (data.socketId === socket.id) return;
+      setElements(prevElements => [...prevElements, data]);
+      requestAnimationFrame(() => drawElement(data, ctx.current));
+    };
 
     socket.on("initialize-canvas", (existingElements) => {
       setElements(existingElements);
-      existingElements.forEach(element => {
-        drawElement(element, ctx.current);
+      requestAnimationFrame(() => {
+        existingElements.forEach(element => {
+          drawElement(element, ctx.current);
+        });
       });
     });
 
-    socket.on("drawing", (data) => {
-      if (data.socketId === socket.id) return;
-      setElements(prevElements => [...prevElements, data]);
-      drawElement(data, ctx.current);
-    });
+    socket.on("drawing", handleIncomingDrawing);
 
     return () => {
       socket.off("drawing");
       socket.off("initialize-canvas");
+      cancelAnimationFrame(requestRef.current);
     };
   }, [socket]);
 
-  const getCanvasCoordinates = (e) => {
+  const getCanvasCoordinates = useCallback((e) => {
     const canvas = canvasRef.current;
     const rect = canvas.getBoundingClientRect();
     const scaleX = canvas.width / rect.width;
@@ -47,16 +67,21 @@ const Canvas = ({ canvasRef, ctx, color, setElements, elements, tool, socket }) 
       x: (e.clientX - rect.left) * scaleX,
       y: (e.clientY - rect.top) * scaleY
     };
-  };
+  }, []);
 
-  const drawElement = (data, context) => {
+  const drawElement = useCallback((data, context) => {
+    if (!context) return;
+    
     const roughCanvas = rough.canvas(canvasRef.current);
 
     switch (data.tool) {
       case "pencil":
+        if (!data.path?.length) return;
         context.beginPath();
         context.strokeStyle = data.stroke;
         context.lineWidth = 2;
+        context.lineJoin = 'round';
+        context.lineCap = 'round';
         data.path.forEach(([x, y], i) => {
           if (i === 0) context.moveTo(x, y);
           else context.lineTo(x, y);
@@ -88,18 +113,24 @@ const Canvas = ({ canvasRef, ctx, color, setElements, elements, tool, socket }) 
         );
         break;
     }
-  };
+  }, []);
 
-  const redrawCanvas = () => {
+  const redrawCanvas = useCallback(() => {
+    if (!ctx.current || !canvasRef.current) return;
+    
     ctx.current.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height);
     elements.forEach(element => {
       drawElement(element, ctx.current);
     });
-  };
+  }, [elements, drawElement]);
 
-  const handleMouseDown = (e) => {
+  const handleMouseDown = useCallback((e) => {
+    e.preventDefault(); // Prevent focus issues
+    if (drawingRef.current) return;
+    
     const coords = getCanvasCoordinates(e);
     startCoords.current = coords;
+    drawingRef.current = true;
     setIsDrawing(true);
 
     const element = {
@@ -112,18 +143,15 @@ const Canvas = ({ canvasRef, ctx, color, setElements, elements, tool, socket }) 
       height: 0,
       stroke: color,
       socketId: socket.id,
-      path: []
+      path: tool === "pencil" ? [[coords.x, coords.y]] : []
     };
 
-    if (tool === "pencil") {
-      element.path = [[coords.x, coords.y]];
-    }
+    setElements(prev => [...prev, element]);
+  }, [tool, color, socket.id, getCanvasCoordinates]);
 
-    setElements((prev) => [...prev, element]);
-  };
-
-  const handleMouseMove = (e) => {
-    if (!isDrawing) return;
+  const handleMouseMove = useCallback((e) => {
+    e.preventDefault(); // Prevent focus issues
+    if (!drawingRef.current) return;
 
     const coords = getCanvasCoordinates(e);
     const updatedElements = [...elements];
@@ -131,53 +159,78 @@ const Canvas = ({ canvasRef, ctx, color, setElements, elements, tool, socket }) 
     const currentElement = updatedElements[currentElementIndex];
 
     if (tool === "pencil") {
-      if (!currentElement.path) {
-        currentElement.path = [];
-      }
+      if (!currentElement.path) currentElement.path = [];
       currentElement.path.push([coords.x, coords.y]);
-    } else if (tool === "rect") {
-      const width = coords.x - startCoords.current.x;
-      const height = coords.y - startCoords.current.y;
-      currentElement.width = width;
-      currentElement.height = height;
-    } else if (tool === "line") {
-      currentElement.endX = coords.x;
-      currentElement.endY = coords.y;
+      bufferRef.current.push(currentElement);
+      
+      // Only emit every few points to reduce network traffic
+      if (bufferRef.current.length >= 3) {
+        debouncedEmit(currentElement);
+        bufferRef.current = [];
+      }
+    } else {
+      if (tool === "rect") {
+        currentElement.width = coords.x - startCoords.current.x;
+        currentElement.height = coords.y - startCoords.current.y;
+      } else if (tool === "line") {
+        currentElement.endX = coords.x;
+        currentElement.endY = coords.y;
+      }
+      debouncedEmit(currentElement);
     }
 
     updatedElements[currentElementIndex] = currentElement;
     setElements(updatedElements);
-    redrawCanvas();
-  };
+    
+    // Use requestAnimationFrame for smooth rendering
+    cancelAnimationFrame(requestRef.current);
+    requestRef.current = requestAnimationFrame(redrawCanvas);
+  }, [elements, tool, getCanvasCoordinates, debouncedEmit, redrawCanvas]);
 
-  const handleMouseUp = () => {
+  const handleMouseUp = useCallback((e) => {
+    e.preventDefault(); // Prevent focus issues
+    if (!drawingRef.current) return;
+    
+    drawingRef.current = false;
     setIsDrawing(false);
+    bufferRef.current = [];
+    
     const currentElement = elements[elements.length - 1];
-    socket.emit("drawing", currentElement);
-  };
+    socket.emit("drawing", currentElement); // Final emit without debounce
+    debouncedEmit.cancel(); // Cancel any pending debounced emits
+  }, [elements, socket, debouncedEmit]);
 
   useEffect(() => {
-    const handleResize = () => {
+    const handleResize = debounce(() => {
+      if (!canvasRef.current) return;
+      
       const canvas = canvasRef.current;
       const rect = canvas.getBoundingClientRect();
       canvas.width = rect.width;
       canvas.height = rect.height;
       redrawCanvas();
-    };
+    }, 250);
 
     window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
-  }, [elements]);
+    return () => {
+      window.removeEventListener('resize', handleResize);
+      handleResize.cancel();
+    };
+  }, [redrawCanvas]);
 
   return (
     <div
-      className="relative h-screen w-full bg-gray-100 overflow-hidden"
+      className="relative h-screen w-full bg-gray-100 overflow-hidden touch-none"
       onMouseDown={handleMouseDown}
       onMouseMove={handleMouseMove}
       onMouseUp={handleMouseUp}
       onMouseLeave={handleMouseUp}
     >
-      <canvas ref={canvasRef} className="absolute top-0 left-0 w-full h-full bg-white shadow-lg rounded-md" />
+      <canvas 
+        ref={canvasRef} 
+        className="absolute top-0 left-0 w-full h-full bg-white shadow-lg rounded-md"
+        style={{ touchAction: 'none' }} // Prevent touch scrolling
+      />
     </div>
   );
 };

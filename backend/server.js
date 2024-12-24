@@ -3,11 +3,9 @@ const http = require("http");
 const cors = require("cors");
 const { createClient } = require("@supabase/supabase-js");
 const { userJoin, getUsers, userLeave } = require("./utils/user");
+require("dotenv").config();
 
-const supabase = createClient(
-  "https://nbzkwqcejogrblsjsdhs.supabase.co",
-  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5iemt3cWNlam9ncmJsc2pzZGhzIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTczNTAyMjU0OCwiZXhwIjoyMDUwNTk4NTQ4fQ.xxFkvJb-iBDtKSvFrFn4aeq0RWAurfNmLAnvuAdTwmk"
-);
+const supabase = createClient(process.env.DB_URL, process.env.DB_SECRET);
 
 // Rest of your imports...
 
