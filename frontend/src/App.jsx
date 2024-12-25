@@ -33,7 +33,7 @@ const App = () => {
 
   return (
     <div className="home">
-      <ToastContainer />
+      {/* <ToastContainer /> */}
       {roomJoined ? (
         <>
           {/* <Sidebar users={users} user={user} socket={socket} /> */}
