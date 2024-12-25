@@ -4,12 +4,11 @@ import io from "socket.io-client";
 // import ClientRoom from "./ClientRoom";
 import JoinCreateRoom from "./components/JoinCreateRoom";
 import Room from "./components/Room";
-import { v4 as uuid } from 'uuid';
-
+import { v4 as uuid } from "uuid";
 
 import "./index.css";
 
-const server = "http://localhost:5000";
+const server = process.env.REACT_APP_BACKEND_URL || "http://localhost:5000";
 const connectionOptions = {
   "force new connection": true,
   reconnectionAttempts: "Infinity",
@@ -25,7 +24,6 @@ const App = () => {
   const [user, setUser] = useState({});
   const [users, setUsers] = useState([]);
   const [roomId, setRoomId] = useState("");
-
 
   useEffect(() => {
     if (roomJoined) {
