@@ -1,3 +1,5 @@
+// Room.jsx
+
 import React, { useEffect, useRef, useState } from "react";
 import { toast } from "react-toastify";
 import {
@@ -15,61 +17,123 @@ const Room = ({
   socket,
   setUsers,
   setUserNo,
-  leaveRoom,
 }) => {
   const canvasRef = useRef(null);
-  const ctx = useRef(null);
-  const [color, setColor] = useState("#000000");
-  const [elements, setElements] = useState([]);
+  const [color, setColor] = useState("#000000"); // Default color, will be overwritten
   const [tool, setTool] = useState("pencil");
+  const [isInRoom, setIsInRoom] = useState(true); // Track if user is in the room
 
+  console.log(userNo);
+
+  // Listen for messages from the server
   useEffect(() => {
-    socket.on("message", (data) => {
+    const handleMessage = (data) => {
       toast.info(data.message);
-    });
-  }, [socket]);
+    };
 
-  useEffect(() => {
-    socket.on("users", (data) => {
-      setUsers(data);
-      setUserNo(data.length);
-    });
-  }, [socket, setUsers, setUserNo]);
-
-  useEffect(() => {
-    socket.on("drawingEvent", (data) => {
-      setElements((prevElements) => [...prevElements, data]);
-    });
+    socket.on("message", handleMessage);
 
     return () => {
-      socket.off("drawingEvent");
+      socket.off("message", handleMessage);
     };
   }, [socket]);
 
+  // Listen for user list updates and set the current user's color
   useEffect(() => {
-    if (elements.length > 0) {
-      socket.emit("drawing", elements[elements.length - 1]);
-    }
-  }, [elements, socket]);
+    const handleUsers = (data) => {
+      setUsers(data);
+      setUserNo(data.length);
+
+      // Find the current user based on socket ID
+      const currentUser = data.find((user) => user.id === socket.id);
+      if (currentUser && currentUser.color) {
+        setColor(currentUser.color);
+      }
+    };
+
+    socket.on("users", handleUsers);
+
+    return () => {
+      socket.off("users", handleUsers);
+    };
+  }, [socket, setUsers, setUserNo]);
+
+  // Implement the leaveRoom function
+  const handleLeaveRoom = () => {
+    // Emit a "leave room" event to the server
+    socket.emit("leave room", { roomId, userId: socket.id });
+
+    // Optionally, you can also emit a disconnect event
+    socket.disconnect();
+
+    // Update the component state to reflect that the user has left
+    setIsInRoom(false);
+
+    // Optionally, show a toast notification
+    toast.success("You have left the room.");
+  };
+
+  // Optionally, handle socket disconnect/reconnect if needed
+  useEffect(() => {
+    const handleDisconnect = () => {
+      console.log("Socket disconnected.");
+    };
+
+    const handleReconnect = () => {
+      console.log("Socket reconnected.");
+      // Optionally, rejoin the room if needed
+      // socket.emit("join room", { roomId, userId: socket.id, ... });
+    };
+
+    socket.on("disconnect", handleDisconnect);
+    socket.on("reconnect", handleReconnect);
+
+    return () => {
+      socket.off("disconnect", handleDisconnect);
+      socket.off("reconnect", handleReconnect);
+    };
+  }, [socket]);
+
+  if (!isInRoom) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-zinc-800 ">
+        <div className="text-center">
+          <h1 className="text-2xl font-bold text-red-500 mb-4">You have left the room.</h1>
+          <button
+            onClick={() => {
+              // Optionally, reload the page or navigate to a different component/state
+              window.location.reload();
+            }}
+            className="px-4 py-2 rounded-lg shadow-md bg-gray-700 text-gray-400 hover:bg-gray-600 hover:text-white transition-colors duration-200"
+          >
+            Return to Lobby
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-zinc-100 flex flex-col">
-      {/* Toolbar */}
-
       {/* Main Content */}
       <div className="flex relative justify-between p-4 m-4 shadow-md bg-zinc-800 rounded-lg text-white">
         {/* Top Bar with Leave Button and Active Users */}
         <div className="flex space-x-4 items-center">
-          <h2 className="text-lg font-semibold text-white">Active Users:</h2>
+          <h2 className="text-lg font-semibold text-white">
+            Active Users ({userNo}):
+          </h2>
           <div className="flex space-x-2">
             {users.map((user) => (
               <div
                 key={user.id}
                 className="flex flex-col items-center space-y-1"
-                title={user.name}
+                title={user.username}
               >
-                <div className="w-8 h-8 bg-indigo-500 text-white rounded-full flex items-center justify-center text-sm font-bold">
-                  {user?.id?.charAt(0).toUpperCase()}
+                <div
+                  className="w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold"
+                  style={{ backgroundColor: user.color || "#000000" }}
+                >
+                  {user.username.charAt(0).toUpperCase()}
                 </div>
               </div>
             ))}
@@ -78,7 +142,7 @@ const Room = ({
 
         {/* Leave Room Button */}
         <button
-          onClick={leaveRoom}
+          onClick={handleLeaveRoom}
           className="flex items-center bg-red-500 text-white px-4 py-2 rounded-lg shadow-md hover:bg-red-600 transition-colors duration-200"
           title="Leave Room"
         >
@@ -86,11 +150,13 @@ const Room = ({
           Leave
         </button>
       </div>
+
       <div
-        className="w-full flex  justify-between items-start p-4"
+        className="w-full flex justify-between items-start p-4"
         style={{ minHeight: "80vh" }}
       >
-        <div className="w-20 bg-zinc-800 rounded-lg text-white flex flex-col items-center p-0  ">
+        {/* Toolbar */}
+        <div className="w-20 bg-zinc-800 rounded-lg text-white flex flex-col items-center p-0">
           {[
             { id: "pencil", icon: <FaPencilAlt size={20} />, label: "Pencil" },
             { id: "line", icon: <FaMinus size={20} />, label: "Line" },
@@ -100,11 +166,10 @@ const Room = ({
               label: "Rectangle",
             },
           ].map(({ id, icon, label }) => (
-            <>
+            <React.Fragment key={id}>
               <button
-                key={id}
                 onClick={() => setTool(id)}
-                className={`flex flex-col items-center justify-center px-2 py-4 focus-visible:outline-none focus-visible:border-0 focus:outline-none  w-full  ${
+                className={`flex flex-col items-center justify-center px-2 py-4 focus-visible:outline-none focus-visible:border-0 focus:outline-none w-full ${
                   id === "pencil" ? `rounded-t-lg` : "rounded-none"
                 } ${
                   tool === id
@@ -116,33 +181,36 @@ const Room = ({
                 {icon}
                 <span className="text-xs pt-1">{label}</span>
               </button>
-              <hr className="border-t border-zinc-600 w-full" style={{borderTop:"solid 1px #52525b"}} />
-              {/* Color Picker */}
-            </>
+              <hr
+                className="border-t border-zinc-600 w-full"
+                style={{ borderTop: "solid 1px #52525b" }}
+              />
+            </React.Fragment>
           ))}
-          <div className=" flex flex-col items-center justify-center px-2 py-4  w-full rounded-none">
-            <input
-              type="color"
-              value={color}
-              onChange={(e) => setColor(e.target.value)}
-              className=" h-8 border-none cursor-pointer bg-transparent w-full"
-              title="Choose Color"
-            />
+
+          {/* Display Current User's Color */}
+          <div className="flex flex-col items-center justify-center px-2 py-4 w-full rounded-none">
+            <div
+              className="h-8 w-full cursor-default bg-transparent border-none flex items-center justify-center"
+              title="Your Assigned Color"
+            >
+              <div
+                className="h-6 w-6 rounded-full border border-gray-300"
+                style={{ backgroundColor: color }}
+              ></div>
+            </div>
             <span className="text-xs pt-1">Color</span>
           </div>
         </div>
 
         {/* Canvas */}
         <div
-          className=" bg-white shadow-md rounded-lg border border-gray-200 ml-4 mb-4 w-full h-full"
+          className="bg-white shadow-md rounded-lg border border-gray-200 ml-4 mb-4 w-full h-full"
           style={{ minHeight: "80vh" }}
         >
           <Canvas
             canvasRef={canvasRef}
-            ctx={ctx}
             color={color}
-            setElements={setElements}
-            elements={elements}
             tool={tool}
             socket={socket}
           />

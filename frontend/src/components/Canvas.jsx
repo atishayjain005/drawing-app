@@ -1,4 +1,6 @@
-import React, { useEffect, useRef, useState, useCallback } from "react";
+// Canvas.jsx
+
+import React, { useEffect, useRef, useCallback } from "react";
 import rough from "roughjs";
 import { debounce } from "lodash";
 
@@ -8,10 +10,11 @@ const Canvas = ({ canvasRef, color, tool, socket }) => {
   const isDrawing = useRef(false);
   const startCoords = useRef(null);
   const bufferRef = useRef([]);
-  const elementsRef = useRef([]); // Avoid state updates for elements
+  const elementsRef = useRef([]); // Manage elements using ref to prevent unnecessary re-renders
   const offscreenCanvasRef = useRef(null);
   const ctx = useRef(null);
 
+  // Debounced function to emit drawing events
   const debouncedEmit = useCallback(
     debounce((element) => {
       socket.emit("drawing", element);
@@ -19,6 +22,7 @@ const Canvas = ({ canvasRef, color, tool, socket }) => {
     [socket]
   );
 
+  // Helper to get canvas coordinates from mouse event
   const getCanvasCoordinates = useCallback((e) => {
     const canvas = canvasRef.current;
     const rect = canvas.getBoundingClientRect();
@@ -26,8 +30,9 @@ const Canvas = ({ canvasRef, color, tool, socket }) => {
       x: (e.clientX - rect.left) * (canvas.width / rect.width),
       y: (e.clientY - rect.top) * (canvas.height / rect.height),
     };
-  }, []);
+  }, [canvasRef]);
 
+  // Function to draw an element on the canvas
   const drawElement = useCallback((element, context) => {
     if (!context) return;
 
@@ -35,9 +40,9 @@ const Canvas = ({ canvasRef, color, tool, socket }) => {
 
     switch (element.tool) {
       case "pencil":
-        if (!element.path?.length) return;
+        if (!Array.isArray(element.path) || element.path.length === 0) return;
         context.beginPath();
-        context.strokeStyle = element.stroke;
+        context.strokeStyle = element.color || "#000000";
         context.lineWidth = 2;
         context.lineJoin = "round";
         context.lineCap = "round";
@@ -54,7 +59,7 @@ const Canvas = ({ canvasRef, color, tool, socket }) => {
             element.startY,
             element.width,
             element.height,
-            { stroke: element.stroke, roughness: 0 }
+            { stroke: element.color || "#000000", roughness: 0 }
           )
         );
         break;
@@ -65,7 +70,7 @@ const Canvas = ({ canvasRef, color, tool, socket }) => {
             element.startY,
             element.endX,
             element.endY,
-            { stroke: element.stroke, roughness: 0 }
+            { stroke: element.color || "#000000", roughness: 0 }
           )
         );
         break;
@@ -74,6 +79,7 @@ const Canvas = ({ canvasRef, color, tool, socket }) => {
     }
   }, []);
 
+  // Function to redraw the entire canvas
   const redrawCanvas = useCallback(() => {
     const canvas = canvasRef.current;
     if (!ctx.current || !canvas) return;
@@ -85,14 +91,17 @@ const Canvas = ({ canvasRef, color, tool, socket }) => {
 
     ctx.current.clearRect(0, 0, canvas.width, canvas.height);
     ctx.current.drawImage(offscreenCanvasRef.current, 0, 0);
-  }, [drawElement]);
+  }, [drawElement, canvasRef]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
+    if (!canvas) return;
+
     const rect = canvas.getBoundingClientRect();
     canvas.width = rect.width;
     canvas.height = rect.height;
 
+    // Initialize offscreen canvas for rough.js
     offscreenCanvasRef.current = document.createElement("canvas");
     offscreenCanvasRef.current.width = rect.width;
     offscreenCanvasRef.current.height = rect.height;
@@ -100,22 +109,32 @@ const Canvas = ({ canvasRef, color, tool, socket }) => {
     ctx.current = canvas.getContext("2d", { willReadFrequently: true });
     ctx.current.imageSmoothingEnabled = true;
 
+    // Handle incoming drawing data from other users
     socket.on("drawing", (data) => {
-      if (data.socketId === socket.id) return;
+      if (data.socketId === socket.id) return; // Ignore own drawings if echoed back
+      if (data.tool === "pencil" && !Array.isArray(data.path)) {
+        // Ensure path exists for pencil tool
+        data.path = [];
+      }
       elementsRef.current.push(data);
       requestAnimationFrame(redrawCanvas);
     });
 
+    // Initialize canvas with existing elements when joining
     socket.on("initialize-canvas", (existingElements) => {
-      elementsRef.current = existingElements;
+      elementsRef.current = existingElements.map((el) => ({
+        ...el,
+        path: el.tool === "pencil" && !Array.isArray(el.path) ? [] : el.path,
+      }));
       requestAnimationFrame(redrawCanvas);
     });
 
+    // Cleanup on unmount
     return () => {
       socket.off("drawing");
       socket.off("initialize-canvas");
     };
-  }, [socket, redrawCanvas]);
+  }, [socket, redrawCanvas, canvasRef]);
 
   const handleMouseDown = useCallback(
     (e) => {
@@ -123,7 +142,7 @@ const Canvas = ({ canvasRef, color, tool, socket }) => {
       startCoords.current = coords;
       isDrawing.current = true;
 
-      const element = {
+      const newElement = {
         tool,
         startX: coords.x,
         startY: coords.y,
@@ -131,12 +150,12 @@ const Canvas = ({ canvasRef, color, tool, socket }) => {
         endY: coords.y,
         width: 0,
         height: 0,
-        stroke: color,
+        color: color || "#000000", // Use server-assigned color
         socketId: socket.id,
         path: tool === "pencil" ? [[coords.x, coords.y]] : [],
       };
 
-      elementsRef.current.push(element);
+      elementsRef.current.push(newElement);
     },
     [tool, color, socket.id, getCanvasCoordinates]
   );
@@ -148,7 +167,15 @@ const Canvas = ({ canvasRef, color, tool, socket }) => {
       const coords = getCanvasCoordinates(e);
       const currentElement = elementsRef.current[elementsRef.current.length - 1];
 
+      if (!currentElement) {
+        console.error("No current element found during drawing.");
+        return;
+      }
+
       if (tool === "pencil") {
+        if (!Array.isArray(currentElement.path)) {
+          currentElement.path = [];
+        }
         currentElement.path.push([coords.x, coords.y]);
         bufferRef.current.push(currentElement);
 
@@ -178,7 +205,9 @@ const Canvas = ({ canvasRef, color, tool, socket }) => {
     isDrawing.current = false;
     bufferRef.current = [];
     const currentElement = elementsRef.current[elementsRef.current.length - 1];
-    socket.emit("drawing", currentElement);
+    if (currentElement) {
+      socket.emit("drawing", currentElement);
+    }
     debouncedEmit.cancel();
   }, [debouncedEmit, socket]);
 

@@ -1,3 +1,5 @@
+// server.js
+
 const express = require("express");
 const http = require("http");
 const cors = require("cors");
@@ -8,22 +10,6 @@ require("dotenv").config();
 const supabase = createClient(process.env.DB_URL, process.env.DB_SECRET);
 
 // Rest of your imports...
-
-// First, create these tables in Supabase:
-/*
-  rooms:
-    id: uuid (primary key)
-    created_at: timestamp
-    name: text
-    active: boolean
-
-  drawings:
-    id: uuid (primary key)
-    room_id: uuid (foreign key to rooms.id)
-    element_data: jsonb
-    created_at: timestamp
-    sequence: integer
-*/
 
 const app = express();
 const server = http.createServer(app);
@@ -37,7 +23,7 @@ const io = socketIO(server, {
 
 app.use(cors());
 
-// Store canvas state and elements for each ā
+// Store canvas state and elements for each room
 const rooms = new Map();
 const BATCH_INTERVAL = 50; // ms
 const drawingBatches = new Map();
@@ -54,6 +40,7 @@ setInterval(() => {
   });
 }, BATCH_INTERVAL);
 
+// Function to save a drawing to Supabase
 async function saveDrawing(roomId, elementData) {
   const { data, error } = await supabase.from("drawings").insert({
     room_id: roomId,
@@ -65,6 +52,7 @@ async function saveDrawing(roomId, elementData) {
   return data;
 }
 
+// Function to retrieve all drawings for a room
 async function getRoomDrawings(roomId) {
   const { data, error } = await supabase
     .from("drawings")
@@ -97,7 +85,7 @@ io.on("connection", (socket) => {
       drawingBatches.set(roomId, []);
     }
 
-    // Join user to room
+    // Join user to room with color
     const user = userJoin(socket.id, userName, roomId, host, presenter);
     socket.join(roomId);
 
@@ -117,16 +105,26 @@ io.on("connection", (socket) => {
     }
     room.users.push(user);
 
-    // Send welcome message
+    // Send welcome message along with user info
     socket.emit("message", {
       message: "Welcome to ChatRoom",
+      user: {
+        id: user.id,
+        username: user.username,
+        color: user.color,
+      },
     });
 
     socket.broadcast.to(roomId).emit("message", {
       message: `${userName} has joined`,
+      user: {
+        id: user.id,
+        username: user.username,
+        color: user.color,
+      },
     });
 
-    // Send current users
+    // Send current users with their colors
     io.to(roomId).emit("users", getUsers(roomId));
 
     const existingDrawings = await getRoomDrawings(roomId);
@@ -165,19 +163,25 @@ io.on("connection", (socket) => {
     if (!userRoom || !rooms.has(userRoom)) return;
 
     const room = rooms.get(userRoom);
-    room.elements.push(data);
+    const user = room.users.find(u => u.id === socket.id);
+    if (!user) return;
 
-    await saveDrawing(userRoom, {
+    const drawingData = {
       ...data,
-      sequence: room.elements.length, // Add sequence number
-    });
+      color: user.color, // Include user color
+      sequence: room.elements.length + 1, // Ensure sequence is incremented
+    };
+
+    room.elements.push(drawingData);
+
+    await saveDrawing(userRoom, drawingData);
 
     const batch = drawingBatches.get(userRoom) || [];
-    batch.push(data);
+    batch.push(drawingData);
     drawingBatches.set(userRoom, batch);
 
     // Broadcast to others in room
-    socket.broadcast.to(userRoom).emit("drawing", data);
+    socket.broadcast.to(userRoom).emit("drawing", drawingData);
   });
 
   socket.on("clear", async () => {
@@ -241,7 +245,7 @@ io.on("connection", (socket) => {
   });
 });
 
-// Basic endpoints
+// Basic endpoints remain unchanged
 app.get("/", (req, res) => {
   res.json({ status: "Server is running" });
 });
@@ -259,7 +263,7 @@ server.listen(PORT, () =>
   console.log(`Server running on http://localhost:${PORT}`)
 );
 
-// Graceful shutdown
+// Graceful shutdown remains unchanged
 process.on("SIGTERM", () => {
   server.close(() => {
     console.log("Server closed");
