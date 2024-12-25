@@ -8,7 +8,7 @@ import { v4 as uuid } from "uuid";
 
 import "./index.css";
 
-const server = process.env.REACT_APP_BACKEND_URL || "http://localhost:5000";
+const server = process.env.REACT_APP_BACKEND_URL || "https://drawing-app-91bo.onrender.com" || "http://localhost:5000";
 const connectionOptions = {
   "force new connection": true,
   reconnectionAttempts: "Infinity",
