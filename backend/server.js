@@ -5,6 +5,7 @@ const http = require("http");
 const cors = require("cors");
 const { createClient } = require("@supabase/supabase-js");
 const { getAllowedOrigins } = require("./config");
+const { normalizeDrawingElement } = require("./drawingValidation");
 const { userJoin, getUsers, userLeave } = require("./utils/user");
 require("dotenv").config();
 
@@ -171,9 +172,11 @@ io.on("connection", (socket) => {
     const room = rooms.get(userRoom);
     const user = room.users.find(u => u.id === socket.id);
     if (!user) return;
+    const normalizedElement = normalizeDrawingElement(data);
+    if (!normalizedElement) return;
 
     const drawingData = {
-      ...data,
+      ...normalizedElement,
       color: user.color, // Include user color
       sequence: room.elements.length + 1, // Ensure sequence is incremented
     };
