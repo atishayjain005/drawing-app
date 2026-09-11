@@ -4,10 +4,12 @@ const express = require("express");
 const http = require("http");
 const cors = require("cors");
 const { createClient } = require("@supabase/supabase-js");
+const { getAllowedOrigins } = require("./config");
 const { userJoin, getUsers, userLeave } = require("./utils/user");
 require("dotenv").config();
 
 const supabase = createClient(process.env.DB_URL, process.env.DB_SECRET);
+const allowedOrigins = getAllowedOrigins();
 
 // Rest of your imports...
 
@@ -16,12 +18,16 @@ const server = http.createServer(app);
 const socketIO = require("socket.io");
 const io = socketIO(server, {
   cors: {
-    origin: "*",
+    origin: allowedOrigins,
     methods: ["GET", "POST"],
   },
 });
 
-app.use(cors());
+app.use(
+  cors({
+    origin: allowedOrigins,
+  })
+);
 
 // Store canvas state and elements for each room
 const rooms = new Map();
