@@ -12,8 +12,10 @@ const COLORS = [
 ];
 
 // Function to get an available color
-const getAvailableColor = () => {
-  const usedColors = users.map(user => user.color);
+const getAvailableColor = (room) => {
+  const usedColors = users
+    .filter((user) => user.room === room)
+    .map((user) => user.color);
   const availableColors = COLORS.filter(color => !usedColors.includes(color));
   // If all predefined colors are used, generate a random color
   if (availableColors.length === 0) {
@@ -25,7 +27,7 @@ const getAvailableColor = () => {
 
 // Join user to chat
 const userJoin = (id, username, room, host, presenter) => {
-  const color = getAvailableColor();
+  const color = getAvailableColor(room);
   const user = { id, username, room, host, presenter, color };
 
   users.push(user);
@@ -47,8 +49,13 @@ const getUsers = (room) => {
   return users.filter(user => user.room === room);
 };
 
+const resetUsersForTest = () => {
+  users.length = 0;
+};
+
 module.exports = {
   userJoin,
   userLeave,
   getUsers,
+  resetUsersForTest,
 };
