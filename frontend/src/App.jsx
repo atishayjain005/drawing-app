@@ -5,10 +5,11 @@ import io from "socket.io-client";
 import JoinCreateRoom from "./components/JoinCreateRoom";
 import Room from "./components/Room";
 import { v4 as uuid } from "uuid";
+import { getBackendUrl } from "./config";
 
 import "./index.css";
 
-const server = process.env.REACT_APP_BACKEND_URL || "https://drawing-app-91bo.onrender.com" || "http://localhost:5000";
+const server = getBackendUrl();
 const connectionOptions = {
   "force new connection": true,
   reconnectionAttempts: "Infinity",
