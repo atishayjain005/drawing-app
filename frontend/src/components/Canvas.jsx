@@ -1,6 +1,6 @@
 // Canvas.jsx
 
-import React, { useEffect, useRef, useCallback } from "react";
+import { useEffect, useRef, useCallback, useMemo } from "react";
 import rough from "roughjs";
 import { debounce } from "lodash";
 
@@ -15,10 +15,11 @@ const Canvas = ({ canvasRef, color, tool, socket }) => {
   const ctx = useRef(null);
 
   // Debounced function to emit drawing events
-  const debouncedEmit = useCallback(
-    debounce((element) => {
-      socket.emit("drawing", element);
-    }, 50),
+  const debouncedEmit = useMemo(
+    () =>
+      debounce((element) => {
+        socket.emit("drawing", element);
+      }, 50),
     [socket]
   );
 

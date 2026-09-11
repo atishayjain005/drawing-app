@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { CopyToClipboard } from "react-copy-to-clipboard";
 import { GrRefresh } from "react-icons/gr";
 import { MdOutlineContentCopy } from "react-icons/md";
@@ -46,7 +46,7 @@ const JoinCreateRoom = ({ uuid, setUser, setRoomJoined, setGlobalRoomId }) => {
     if (roomId) {
       setGlobalRoomId(roomId);
     }
-  }, [roomId]);
+  }, [roomId, setGlobalRoomId]);
 
   return (
     <div className="min-h-screen bg-gray-900 dark:bg-gray-800 flex items-center justify-center p-6 relative overflow-hidden">

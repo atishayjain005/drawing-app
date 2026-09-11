@@ -1,5 +1,4 @@
-import React, { useEffect, useState } from "react";
-import { toast, ToastContainer } from "react-toastify";
+import { useEffect, useState } from "react";
 import io from "socket.io-client";
 // import ClientRoom from "./ClientRoom";
 import JoinCreateRoom from "./components/JoinCreateRoom";
@@ -30,7 +29,7 @@ const App = () => {
     if (roomJoined) {
       socket.emit("user-joined", user);
     }
-  }, [roomJoined]);
+  }, [roomJoined, user]);
 
   return (
     <div className="home">
