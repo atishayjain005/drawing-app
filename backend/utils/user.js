@@ -19,7 +19,9 @@ const getAvailableColor = (room) => {
   const availableColors = COLORS.filter(color => !usedColors.includes(color));
   // If all predefined colors are used, generate a random color
   if (availableColors.length === 0) {
-    return `#${Math.floor(Math.random()*16777215).toString(16)}`;
+    return `#${Math.floor(Math.random() * 16777215)
+      .toString(16)
+      .padStart(6, "0")}`;
   }
   // Return the first available color
   return availableColors[0];

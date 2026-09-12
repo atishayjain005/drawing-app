@@ -24,6 +24,7 @@ const JoinCreateRoom = ({ uuid, setUser, setRoomJoined, setGlobalRoomId }) => {
       host: true,
       presenter: true,
     });
+    setGlobalRoomId(validation.roomId);
     setRoomJoined(true);
   };
 
@@ -39,6 +40,7 @@ const JoinCreateRoom = ({ uuid, setUser, setRoomJoined, setGlobalRoomId }) => {
       host: false,
       presenter: false,
     });
+    setGlobalRoomId(validation.roomId);
     setRoomJoined(true);
   };
 

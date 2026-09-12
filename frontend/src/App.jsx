@@ -1,17 +1,18 @@
 import { useEffect, useState } from "react";
+import { ToastContainer } from "react-toastify";
 import io from "socket.io-client";
-// import ClientRoom from "./ClientRoom";
 import JoinCreateRoom from "./components/JoinCreateRoom";
 import Room from "./components/Room";
 import { v4 as uuid } from "uuid";
 import { getBackendUrl } from "./config";
 
+import "react-toastify/dist/ReactToastify.css";
 import "./index.css";
 
 const server = getBackendUrl();
 const connectionOptions = {
   "force new connection": true,
-  reconnectionAttempts: "Infinity",
+  reconnectionAttempts: Infinity,
   timeout: 10000,
   transports: ["websocket"],
 };
@@ -33,11 +34,9 @@ const App = () => {
 
   return (
     <div className="home">
-      {/* <ToastContainer /> */}
+      <ToastContainer position="top-right" autoClose={2500} theme="dark" />
       {roomJoined ? (
         <>
-          {/* <Sidebar users={users} user={user} socket={socket} /> */}
-          {/* {user.presenter ? ( */}
           <Room
             userNo={userNo}
             user={user}
@@ -47,15 +46,6 @@ const App = () => {
             setUserNo={setUserNo}
             roomId={roomId}
           />
-          {/* ) : (
-            <ClientRoom
-              userNo={userNo}
-              user={user}
-              socket={socket}
-              setUsers={setUsers}
-              setUserNo={setUserNo}
-            />
-          )} */}
         </>
       ) : (
         <JoinCreateRoom

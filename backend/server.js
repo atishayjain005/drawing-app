@@ -9,7 +9,10 @@ const { normalizeDrawingElement } = require("./drawingValidation");
 const { userJoin, getUsers, userLeave } = require("./utils/user");
 require("dotenv").config();
 
-const supabase = createClient(process.env.DB_URL, process.env.DB_SECRET);
+const hasSupabaseConfig = Boolean(process.env.DB_URL && process.env.DB_SECRET);
+const supabase = hasSupabaseConfig
+  ? createClient(process.env.DB_URL, process.env.DB_SECRET)
+  : null;
 const allowedOrigins = getAllowedOrigins();
 
 // Rest of your imports...
@@ -49,6 +52,8 @@ setInterval(() => {
 
 // Function to save a drawing to Supabase
 async function saveDrawing(roomId, elementData) {
+  if (!supabase) return null;
+
   const { data, error } = await supabase.from("drawings").insert({
     room_id: roomId,
     element_data: elementData,
@@ -61,6 +66,8 @@ async function saveDrawing(roomId, elementData) {
 
 // Function to retrieve all drawings for a room
 async function getRoomDrawings(roomId) {
+  if (!supabase) return [];
+
   const { data, error } = await supabase
     .from("drawings")
     .select("element_data")
@@ -81,12 +88,14 @@ io.on("connection", (socket) => {
     const { roomId, userId, userName, host, presenter } = data;
     userRoom = roomId;
 
-    const { error: roomError } = await supabase.from("rooms").upsert({
-      id: roomId,
-      active: true,
-    });
+    if (supabase) {
+      const { error: roomError } = await supabase.from("rooms").upsert({
+        id: roomId,
+        active: true,
+      });
 
-    if (roomError) console.error("Error updating room:", roomError);
+      if (roomError) console.error("Error updating room:", roomError);
+    }
 
     if (!drawingBatches.has(roomId)) {
       drawingBatches.set(roomId, []);
@@ -104,12 +113,8 @@ io.on("connection", (socket) => {
       });
     }
 
-    // Add user to room
     const room = rooms.get(roomId);
-    if (room && room.elements.length > 0) {
-      // Send all existing elements at once
-      socket.emit("initialize-canvas", room.elements);
-    }
+    room.users = room.users.filter((existingUser) => existingUser.id !== socket.id);
     room.users.push(user);
 
     // Send welcome message along with user info
@@ -135,34 +140,38 @@ io.on("connection", (socket) => {
     io.to(roomId).emit("users", getUsers(roomId));
 
     const existingDrawings = await getRoomDrawings(roomId);
-    rooms.get(roomId).elements = existingDrawings;
+    if (existingDrawings.length > 0) {
+      room.elements = existingDrawings;
+    }
 
     // Send current canvas state to new user
-    socket.emit("drawing", existingDrawings);
+    socket.emit("initialize-canvas", room.elements);
 
     const drawingSubscription = supabase
-      .channel(`room-${roomId}`)
-      .on(
-        "INSERT",
-        {
-          event: "*",
-          schema: "public",
-          table: "drawings",
-          filter: `room_id=eq.${roomId}`,
-        },
-        (payload) => {
-          // Handle new drawings from other clients/servers
-          if (payload.new && payload.new.element_data) {
-            socket.broadcast
-              .to(roomId)
-              .emit("drawing", payload.new.element_data);
-          }
-        }
-      )
-      .subscribe();
+      ? supabase
+          .channel(`room-${roomId}`)
+          .on(
+            "postgres_changes",
+            {
+              event: "INSERT",
+              schema: "public",
+              table: "drawings",
+              filter: `room_id=eq.${roomId}`,
+            },
+            (payload) => {
+              // Handle new drawings from other clients/servers
+              if (payload.new && payload.new.element_data) {
+                socket.broadcast
+                  .to(roomId)
+                  .emit("drawing", payload.new.element_data);
+              }
+            }
+          )
+          .subscribe()
+      : null;
 
     socket.on("disconnect", () => {
-      drawingSubscription.unsubscribe();
+      if (drawingSubscription) drawingSubscription.unsubscribe();
     });
   });
 
@@ -178,6 +187,7 @@ io.on("connection", (socket) => {
     const drawingData = {
       ...normalizedElement,
       color: user.color, // Include user color
+      socketId: socket.id,
       sequence: room.elements.length + 1, // Ensure sequence is incremented
     };
 
@@ -193,15 +203,24 @@ io.on("connection", (socket) => {
     socket.broadcast.to(userRoom).emit("drawing", drawingData);
   });
 
+  socket.on("leave room", ({ roomId }) => {
+    if (roomId && userRoom === roomId) {
+      socket.leave(roomId);
+    }
+    socket.disconnect(true);
+  });
+
   socket.on("clear", async () => {
     if (!userRoom || !rooms.has(userRoom)) return;
 
-    const { error } = await supabase
-      .from("drawings")
-      .delete()
-      .eq("room_id", userRoom);
+    if (supabase) {
+      const { error } = await supabase
+        .from("drawings")
+        .delete()
+        .eq("room_id", userRoom);
 
-    if (error) console.error("Error clearing drawings:", error);
+      if (error) console.error("Error clearing drawings:", error);
+    }
 
     const room = rooms.get(userRoom);
     room.elements = [];
@@ -216,13 +235,15 @@ io.on("connection", (socket) => {
     if (room.elements.length > 0) {
       // Remove last drawing from Supabase
       const lastSequence = room.elements.length;
-      const { error } = await supabase
-        .from("drawings")
-        .delete()
-        .eq("room_id", userRoom)
-        .eq("sequence", lastSequence);
+      if (supabase) {
+        const { error } = await supabase
+          .from("drawings")
+          .delete()
+          .eq("room_id", userRoom)
+          .eq("sequence", lastSequence);
 
-      if (error) console.error("Error undoing drawing:", error);
+        if (error) console.error("Error undoing drawing:", error);
+      }
 
       room.elements.pop();
       io.to(userRoom).emit("update-canvas", room.elements);
@@ -264,6 +285,7 @@ app.get("/health", (req, res) => {
     status: "healthy",
     connections: io.engine.clientsCount,
     rooms: Array.from(rooms.keys()),
+    persistence: supabase ? "supabase" : "memory",
   });
 });
 

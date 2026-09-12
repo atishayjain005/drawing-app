@@ -23,7 +23,7 @@ A collaborative whiteboard app for creating rooms, inviting teammates, and drawi
 
 - Node.js 18 or newer
 - npm
-- A Supabase project with `rooms` and `drawings` tables
+- Optional: a Supabase project with `rooms` and `drawings` tables for persisted drawing history
 
 ### Backend
 
@@ -37,14 +37,15 @@ npm run dev
 Backend environment variables:
 
 ```env
-DB_URL=https://your-project-ref.supabase.co
-DB_SECRET=your-supabase-service-role-key
-DB_ANON_PUBLIC=your-supabase-anon-key
 CLIENT_ORIGINS=http://localhost:5173
 PORT=5000
+DB_URL=
+DB_SECRET=
+DB_ANON_PUBLIC=
 ```
 
 `CLIENT_ORIGINS` accepts a comma-separated list of browser origins allowed to connect through HTTP and Socket.IO.
+When `DB_URL` and `DB_SECRET` are blank, the backend runs local rooms in memory so the app can be reviewed without a Supabase account. Add Supabase credentials only when you want persisted room history.
 
 ### Frontend
 
@@ -68,6 +69,7 @@ Run backend checks:
 ```bash
 cd backend
 npm test
+npm run smoke
 ```
 
 Run frontend checks:

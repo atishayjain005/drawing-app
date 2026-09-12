@@ -11,6 +11,7 @@ const Canvas = ({ canvasRef, color, tool, socket }) => {
   const startCoords = useRef(null);
   const bufferRef = useRef([]);
   const elementsRef = useRef([]); // Manage elements using ref to prevent unnecessary re-renders
+  const seenElementKeys = useRef(new Set());
   const offscreenCanvasRef = useRef(null);
   const ctx = useRef(null);
 
@@ -32,6 +33,23 @@ const Canvas = ({ canvasRef, color, tool, socket }) => {
       y: (e.clientY - rect.top) * (canvas.height / rect.height),
     };
   }, [canvasRef]);
+
+  const getElementKey = useCallback((element) => {
+    if (!element || element.sequence === undefined) return null;
+    return `${element.socketId || "remote"}:${element.sequence}`;
+  }, []);
+
+  const normalizeElement = useCallback((element) => {
+    if (!element || Array.isArray(element)) return null;
+
+    return {
+      ...element,
+      path:
+        element.tool === "pencil" && !Array.isArray(element.path)
+          ? []
+          : element.path,
+    };
+  }, []);
 
   // Function to draw an element on the canvas
   const drawElement = useCallback((element, context) => {
@@ -94,6 +112,32 @@ const Canvas = ({ canvasRef, color, tool, socket }) => {
     ctx.current.drawImage(offscreenCanvasRef.current, 0, 0);
   }, [drawElement, canvasRef]);
 
+  const rememberElements = useCallback(
+    (elements) => {
+      seenElementKeys.current = new Set();
+      elements.forEach((element) => {
+        const key = getElementKey(element);
+        if (key) seenElementKeys.current.add(key);
+      });
+    },
+    [getElementKey]
+  );
+
+  const addRemoteElement = useCallback(
+    (element) => {
+      const normalizedElement = normalizeElement(element);
+      if (!normalizedElement || normalizedElement.socketId === socket.id) return;
+
+      const key = getElementKey(normalizedElement);
+      if (key && seenElementKeys.current.has(key)) return;
+      if (key) seenElementKeys.current.add(key);
+
+      elementsRef.current.push(normalizedElement);
+      requestAnimationFrame(redrawCanvas);
+    },
+    [getElementKey, normalizeElement, redrawCanvas, socket.id]
+  );
+
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -110,35 +154,67 @@ const Canvas = ({ canvasRef, color, tool, socket }) => {
     ctx.current = canvas.getContext("2d", { willReadFrequently: true });
     ctx.current.imageSmoothingEnabled = true;
 
-    // Handle incoming drawing data from other users
-    socket.on("drawing", (data) => {
-      if (data.socketId === socket.id) return; // Ignore own drawings if echoed back
-      if (data.tool === "pencil" && !Array.isArray(data.path)) {
-        // Ensure path exists for pencil tool
-        data.path = [];
+    const handleDrawing = (data) => {
+      if (Array.isArray(data)) {
+        data.forEach(addRemoteElement);
+        return;
       }
-      elementsRef.current.push(data);
-      requestAnimationFrame(redrawCanvas);
-    });
+      addRemoteElement(data);
+    };
 
-    // Initialize canvas with existing elements when joining
-    socket.on("initialize-canvas", (existingElements) => {
-      elementsRef.current = existingElements.map((el) => ({
-        ...el,
-        path: el.tool === "pencil" && !Array.isArray(el.path) ? [] : el.path,
-      }));
+    const handleDrawingBatch = (batch) => {
+      if (!Array.isArray(batch)) return;
+      batch.forEach(addRemoteElement);
+    };
+
+    const handleInitializeCanvas = (existingElements) => {
+      elementsRef.current = Array.isArray(existingElements)
+        ? existingElements.map(normalizeElement).filter(Boolean)
+        : [];
+      rememberElements(elementsRef.current);
       requestAnimationFrame(redrawCanvas);
-    });
+    };
+
+    const handleClear = () => {
+      elementsRef.current = [];
+      seenElementKeys.current = new Set();
+      requestAnimationFrame(redrawCanvas);
+    };
+
+    const handleUpdateCanvas = (elements) => {
+      elementsRef.current = Array.isArray(elements)
+        ? elements.map(normalizeElement).filter(Boolean)
+        : [];
+      rememberElements(elementsRef.current);
+      requestAnimationFrame(redrawCanvas);
+    };
+
+    socket.on("drawing", handleDrawing);
+    socket.on("drawing-batch", handleDrawingBatch);
+    socket.on("initialize-canvas", handleInitializeCanvas);
+    socket.on("clear", handleClear);
+    socket.on("update-canvas", handleUpdateCanvas);
 
     // Cleanup on unmount
     return () => {
-      socket.off("drawing");
-      socket.off("initialize-canvas");
+      socket.off("drawing", handleDrawing);
+      socket.off("drawing-batch", handleDrawingBatch);
+      socket.off("initialize-canvas", handleInitializeCanvas);
+      socket.off("clear", handleClear);
+      socket.off("update-canvas", handleUpdateCanvas);
     };
-  }, [socket, redrawCanvas, canvasRef]);
+  }, [
+    socket,
+    redrawCanvas,
+    canvasRef,
+    addRemoteElement,
+    normalizeElement,
+    rememberElements,
+  ]);
 
-  const handleMouseDown = useCallback(
+  const handlePointerDown = useCallback(
     (e) => {
+      e.currentTarget.setPointerCapture(e.pointerId);
       const coords = getCanvasCoordinates(e);
       startCoords.current = coords;
       isDrawing.current = true;
@@ -161,7 +237,7 @@ const Canvas = ({ canvasRef, color, tool, socket }) => {
     [tool, color, socket.id, getCanvasCoordinates]
   );
 
-  const handleMouseMove = useCallback(
+  const handlePointerMove = useCallback(
     (e) => {
       if (!isDrawing.current) return;
 
@@ -200,9 +276,12 @@ const Canvas = ({ canvasRef, color, tool, socket }) => {
     [tool, getCanvasCoordinates, debouncedEmit, redrawCanvas]
   );
 
-  const handleMouseUp = useCallback(() => {
+  const handlePointerUp = useCallback((e) => {
     if (!isDrawing.current) return;
 
+    if (e?.currentTarget?.hasPointerCapture(e.pointerId)) {
+      e.currentTarget.releasePointerCapture(e.pointerId);
+    }
     isDrawing.current = false;
     bufferRef.current = [];
     const currentElement = elementsRef.current[elementsRef.current.length - 1];
@@ -215,10 +294,10 @@ const Canvas = ({ canvasRef, color, tool, socket }) => {
   return (
     <div
       className="relative h-screen w-full bg-gray-100 overflow-hidden touch-none"
-      onMouseDown={handleMouseDown}
-      onMouseMove={handleMouseMove}
-      onMouseUp={handleMouseUp}
-      onMouseLeave={handleMouseUp}
+      onPointerDown={handlePointerDown}
+      onPointerMove={handlePointerMove}
+      onPointerUp={handlePointerUp}
+      onPointerCancel={handlePointerUp}
     >
       <canvas
         ref={canvasRef}
