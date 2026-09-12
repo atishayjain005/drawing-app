@@ -1,6 +1,6 @@
 // Room.jsx
 
-import React, { useEffect, useRef, useState } from "react";
+import { Fragment, useEffect, useRef, useState } from "react";
 import { toast } from "react-toastify";
 import {
   FaPencilAlt,
@@ -166,7 +166,7 @@ const Room = ({
               label: "Rectangle",
             },
           ].map(({ id, icon, label }) => (
-            <React.Fragment key={id}>
+            <Fragment key={id}>
               <button
                 onClick={() => setTool(id)}
                 className={`flex flex-col items-center justify-center px-2 py-4 focus-visible:outline-none focus-visible:border-0 focus:outline-none w-full ${
@@ -185,7 +185,7 @@ const Room = ({
                 className="border-t border-zinc-600 w-full"
                 style={{ borderTop: "solid 1px #52525b" }}
               />
-            </React.Fragment>
+            </Fragment>
           ))}
 
           {/* Display Current User's Color */}

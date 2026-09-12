@@ -1,85 +1,89 @@
-# 🖌️ Whiteboard Sharing Application
+# Whiteboard Sharing Application
 
-A collaborative whiteboard-sharing app for real-time drawing and collaboration using modern web technologies.
+A collaborative whiteboard app for creating rooms, inviting teammates, and drawing together in real time.
 
----
+## Features
 
-## 🌟 Features
-- 🎨 Real-time whiteboard collaboration
-- 🚀 Room-based drawing and messaging
-- 🔒 Scalable backend with **Supabase** for real-time database management
-- 📊 SQL-based operations for data handling
-- 🌈 User-friendly and responsive UI
+- Real-time room-based drawing with Socket.IO
+- Pencil, line, and rectangle tools
+- Per-room participant colors
+- Persisted drawing history through Supabase
+- Frontend form validation for room creation and joining
+- Backend validation for drawing payloads before persistence
 
----
+## Tech Stack
 
-## 🛠️ Technologies Used
+- Frontend: React, Vite, Tailwind CSS, Rough.js, Socket.IO Client
+- Backend: Node.js, Express, Socket.IO, Supabase
+- Testing: Vitest for frontend utilities, Jest for backend utilities
 
-### **Frontend**
-- **React**: A JavaScript library for building user interfaces.
-- **Vite**: Fast development and build tool.
-- **TailwindCSS**: For responsive and beautiful designs.
-- **Socket.IO Client**: Real-time communication with the backend.
-- **Rough.js**: Hand-drawn styled graphics for the whiteboard.
-- **UUID**: Unique ID generation for users.
-- **Lodash**: Utility library for data manipulation.
-- **React Copy to Clipboard**: Simplifies copying content to the clipboard.
+## Setup
 
-### **Backend**
-- **Express**: A fast and minimalist web framework for Node.js.
-- **Socket.IO**: Real-time communication for collaborative drawing.
-- **Supabase**: SQL-based real-time database management.
-- **CORS**: Cross-Origin Resource Sharing for secure communication.
-- **Dotenv**: Securely manage environment variables.
+### Prerequisites
 
----
+- Node.js 18 or newer
+- npm
+- Optional: a Supabase project with `rooms` and `drawings` tables for persisted drawing history
 
-## 🖥️ Deployment
+### Backend
 
-### Links
-- **Frontend**: [Netlify Deployment](https://cool-brioche-284169.netlify.app/)
-- **Backend**: [Render Deployment](https://drawing-app-91bo.onrender.com/)
+```bash
+cd backend
+cp .env.example .env
+npm install
+npm run dev
+```
 
----
+Backend environment variables:
 
-## 🚀 Installation & Setup
+```env
+CLIENT_ORIGINS=http://localhost:5173
+PORT=5000
+DB_URL=
+DB_SECRET=
+DB_ANON_PUBLIC=
+```
 
-### Prerequisites:
-- Node.js (v16 or higher)
-- npm or yarn
+`CLIENT_ORIGINS` accepts a comma-separated list of browser origins allowed to connect through HTTP and Socket.IO.
+When `DB_URL` and `DB_SECRET` are blank, the backend runs local rooms in memory so the app can be reviewed without a Supabase account. Add Supabase credentials only when you want persisted room history.
 
-### Steps:
-1. Clone the repository:
-   ```bash
-   git clone <repository-url>
-   ```
+### Frontend
 
-2. Navigate to the directories and install dependencies:
-   ```bash
-   cd frontend && npm install
-   cd ../backend && npm install
-   ```
+```bash
+cd frontend
+cp .env.example .env
+npm install
+npm run dev
+```
 
-3. Set up environment variables:
-   - **Frontend**:
-     ```env
-     REACT_APP_BACKEND_URL=<backend-url>
-     ```
-   - **Backend**:
-     ```env
-     DB_URL=<supabase-url>
-     DB_SECRET=<supabase-secret>
-     ```
+Frontend environment variables:
 
-4. Start the development servers:
-   - Frontend:
-     ```bash
-     npm run start
-     ```
-   - Backend:
-     ```bash
-     npm run dev
-     ```
+```env
+VITE_BACKEND_URL=http://localhost:5000
+```
 
+## Quality Checks
 
+Run backend checks:
 
+```bash
+cd backend
+npm test
+npm run smoke
+```
+
+Run frontend checks:
+
+```bash
+cd frontend
+npm test
+npm run lint
+npm run build
+```
+
+## Deployment Notes
+
+- Keep `.env` files out of git. Use the checked-in `.env.example` files as templates.
+- Configure `CLIENT_ORIGINS` to include the deployed frontend origin.
+- Configure `VITE_BACKEND_URL` to point at the deployed backend URL.
+- Store Supabase keys only in the deployment provider's environment variable settings.
